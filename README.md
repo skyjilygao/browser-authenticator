@@ -131,7 +131,7 @@ browser_authenticator/
 ├── lib/
 │   ├── totp.js                 # TOTP 算法（popup/options 用）
 │   ├── storage.js              # 存储与导入/去重封装
-│   └── qrscanner.js            # jsQR 封装
+│   └── jsQR.js                 # QR 码解码库（本地解码，无网络请求）
 ├── icons/                      # 扩展图标 16/48/128
 ├── imgs/                       # README 预览图
 │   ├── popup.png  option.png  add.png

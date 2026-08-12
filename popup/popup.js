@@ -591,46 +591,93 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('qrFile').addEventListener('change', async (e) => {
+    console.log('[QR] change event fired, files:', e.target.files);
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file) {
+      console.log('[QR] no file selected, return');
+      return;
+    }
+    console.log('[QR] selected file:', file.name, file.type, file.size, 'bytes');
     const reader = new FileReader();
+    reader.onerror = (err) => {
+      console.error('[QR] FileReader error:', err);
+      showToast('读取文件失败：' + (err && err.message ? err.message : '未知错误'), 'error');
+    };
     reader.onload = async (ev) => {
+      console.log('[QR] FileReader onload, result length:', (ev.target.result || '').length);
       const img = new Image();
+      img.onerror = (err) => {
+        console.error('[QR] Image load error:', err);
+        showToast('图片加载失败，无法识别', 'error');
+      };
       img.onload = () => {
+        console.log('[QR] Image onload, size:', img.width, 'x', img.height);
         const canvas = document.getElementById('qrCanvas');
+        if (!canvas) {
+          console.error('[QR] canvas #qrCanvas not found');
+          showToast('缺少 canvas 元素，无法识别', 'error');
+          return;
+        }
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          console.error('[QR] canvas 2d context unavailable');
+          showToast('canvas 上下文获取失败', 'error');
+          return;
+        }
         const maxSize = 1024;
         let w = img.width, h = img.height;
         if (w > maxSize || h > maxSize) {
           const ratio = Math.min(maxSize / w, maxSize / h);
           w = Math.floor(w * ratio);
           h = Math.floor(h * ratio);
+          console.log('[QR] scaled down to', w, 'x', h);
         }
         canvas.width = w;
         canvas.height = h;
         ctx.drawImage(img, 0, 0, w, h);
-        const imageData = ctx.getImageData(0, 0, w, h);
+        let imageData;
+        try {
+          imageData = ctx.getImageData(0, 0, w, h);
+          console.log('[QR] getImageData OK, pixels:', imageData.data.length);
+        } catch (err) {
+          console.error('[QR] getImageData error:', err);
+          showToast('读取图片像素失败：' + err.message, 'error');
+          return;
+        }
+        if (typeof jsQR !== 'function') {
+          console.error('[QR] jsQR is not loaded / not a function. typeof:', typeof jsQR);
+          showToast('jsQR 库未加载，请检查扩展文件完整性', 'error');
+          return;
+        }
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'dontInvert'
         });
+        console.log('[QR] jsQR result:', code ? 'found data=' + code.data : 'null');
         const preview = document.getElementById('qrPreview');
         const previewImg = document.getElementById('qrPreviewImg');
         const resultEl = document.getElementById('qrResult');
-        previewImg.src = ev.target.result;
-        preview.classList.remove('hidden');
+        if (previewImg) previewImg.src = ev.target.result;
+        if (preview) preview.classList.remove('hidden');
         if (code && code.data) {
           pendingImportText = code.data;
-          resultEl.textContent = '识别成功：' + (code.data.length > 60 ? code.data.slice(0, 60) + '...' : code.data);
-          resultEl.style.color = '#10b981';
+          if (resultEl) {
+            resultEl.textContent = '识别成功：' + (code.data.length > 60 ? code.data.slice(0, 60) + '...' : code.data);
+            resultEl.style.color = '#10b981';
+          }
+          showToast('二维码识别成功');
         } else {
           pendingImportText = '';
-          resultEl.textContent = '未能识别二维码内容，请尝试更清晰的图片';
-          resultEl.style.color = '#ef4444';
+          if (resultEl) {
+            resultEl.textContent = '未能识别二维码内容，请尝试更清晰的图片';
+            resultEl.style.color = '#ef4444';
+          }
+          showToast('未能识别二维码内容', 'warning');
         }
       };
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   });
 
   document.getElementById('importFileInput').addEventListener('change', (e) => {
