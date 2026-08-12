@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>身份验证器</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <h2>身份验证器</h2>
+    <div class="header-actions">
+      <button id="importBtn" class="icon-btn" title="导入">↓</button>
+      <button id="exportBtn" class="icon-btn" title="导出">↑</button>
+      <button id="addBtn" class="icon-btn" title="添加">+</button>
+      <button id="optionsBtn" class="icon-btn" title="设置">⚙</button>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <!-- 将以下筛选改成一行四列方式（横向筛选） -->
+    <div class="tag-input-wrapper filter-wrapper" data-for="filter-service">
+      <input type="text" id="filterService" placeholder="🔍 按服务名称筛选" autocomplete="off">
+      <div class="tag-dropdown hidden" data-dropdown="filter-service"></div>
+    </div>
+    <div class="tag-input-wrapper filter-wrapper" data-for="filter-group">
+      <input type="text" id="filterGroup" placeholder="📁 按分组筛选" autocomplete="off">
+      <div class="tag-dropdown hidden" data-dropdown="filter-group"></div>
+    </div>
+    <div class="tag-input-wrapper filter-wrapper" data-for="filter-tags">
+      <input type="text" id="filterTags" placeholder="🏷️ 按标签筛选" autocomplete="off">
+      <div class="tag-dropdown hidden" data-dropdown="filter-tags"></div>
+    </div>
+    <div class="filter-clear-wrapper">
+      <button id="clearFilterBtn" class="clear-filter-btn" title="清除筛选">清除</button>
+    </div>
+  </div>
+
+  <div id="accountList" class="account-list">
+    <div class="empty-state">
+      <p>暂无身份信息</p>
+      <p class="hint">点击右上角「+」添加</p>
+    </div>
+  </div>
+
+  <div id="addModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="addModalTitle">添加身份信息</h3>
+        <button class="close-btn" data-close>&times;</button>
+      </div>
+      <form id="addForm">
+        <input type="hidden" id="editAccountId">
+        <div class="form-group">
+          <label>服务名称 *</label>
+          <div class="tag-input-wrapper" data-for="service">
+            <input type="text" id="serviceName" required placeholder="选择已有服务或输入新名称，回车使用" autocomplete="off">
+            <div class="tag-dropdown hidden" data-dropdown="service"></div>
+          </div>
+          <p class="input-hint">点击输入框可从已有服务中选择；输入新名称后回车即新建（同一服务可关联多个账号）</p>
+        </div>
+        <div class="form-group">
+          <label>用户名/账号 *</label>
+          <input type="text" id="username" required placeholder="用于关联登录时的用户名">
+        </div>
+        <div class="form-group">
+          <label>登录页面地址/域名</label>
+          <input type="text" id="loginUrl" placeholder="如: github.com 或 https://github.com/login">
+          <p class="input-hint">相同用户名在不同网站各有独立TOTP时，请填写此项用于区分</p>
+        </div>
+        <div class="form-group">
+          <label>分组</label>
+          <div class="tag-input-wrapper" data-for="group">
+            <input type="text" id="groupInput" placeholder="输入分组名称，回车添加" autocomplete="off">
+            <div class="tag-dropdown hidden" data-dropdown="group"></div>
+          </div>
+          <p class="input-hint">点击可选择已有分组，输入新名称回车创建</p>
+        </div>
+        <div class="form-group">
+          <label>标签</label>
+          <div class="tags-container" id="tagsContainer"></div>
+          <div class="tag-input-wrapper" data-for="tags">
+            <input type="text" id="tagsInput" placeholder="输入标签，回车添加多个" autocomplete="off">
+            <div class="tag-dropdown hidden" data-dropdown="tags"></div>
+          </div>
+          <p class="input-hint">点击可选择已有标签，输入新名称回车创建</p>
+        </div>
+        <div class="form-group">
+          <label>密钥 (Base32) *</label>
+          <input type="text" id="secret" required spellcheck="false" autocapitalize="characters"
+                 placeholder="如: KU5NYCERC223MKL6 (16位、26位、32位等任意长度)">
+          <p class="input-hint">支持任意长度的有效Base32密钥（A-Z、2-7字符）。如从二维码解析通常是16位或32位</p>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>算法</label>
+            <select id="algorithm">
+              <option value="SHA-1" selected>SHA1</option>
+              <option value="SHA-256">SHA256</option>
+              <option value="SHA-512">SHA512</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>位数</label>
+            <select id="digits">
+              <option value="6" selected>6位</option>
+              <option value="8">8位</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>周期(秒)</label>
+            <select id="period">
+              <option value="30" selected>30秒</option>
+              <option value="60">60秒</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" data-close>取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="importModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>导入身份信息</h3>
+        <button class="close-btn" data-close>&times;</button>
+      </div>
+      <div style="padding: 16px;">
+        <div class="form-group">
+          <label>导入方式</label>
+          <div class="import-tabs">
+            <button class="import-tab active" data-tab="text">文本/URI</button>
+            <button class="import-tab" data-tab="qr">二维码图片</button>
+            <button class="import-tab" data-tab="file">文件</button>
+          </div>
+        </div>
+
+        <div id="tab-text" class="import-tab-content active">
+          <div class="form-group">
+            <label>粘贴内容</label>
+            <textarea id="importText" rows="6" placeholder="粘贴 otpauth://totp/... 或 otpauth-migration://... 或多行URI，每行一个"></textarea>
+            <p class="input-hint">支持 Google Authenticator 导出格式 (otpauth-migration://) 以及单行/多行 otpauth://totp/ URI</p>
+          </div>
+        </div>
+
+        <div id="tab-qr" class="import-tab-content">
+          <div class="form-group">
+            <label>选择二维码图片</label>
+            <label class="btn btn-secondary file-label" style="display:inline-flex;">
+              选择图片
+              <input type="file" id="qrFile" accept="image/*" hidden>
+            </label>
+            <canvas id="qrCanvas" style="display:none;"></canvas>
+            <div id="qrPreview" class="qr-preview hidden">
+              <img id="qrPreviewImg" alt="">
+            </div>
+            <p id="qrResult" class="input-hint"></p>
+          </div>
+        </div>
+
+        <div id="tab-file" class="import-tab-content">
+          <div class="form-group">
+            <label>选择导入文件</label>
+            <label class="btn btn-secondary file-label" style="display:inline-flex;">
+              选择文件
+              <input type="file" id="importFileInput" accept=".txt,.json,.text,application/json,text/plain" hidden>
+            </label>
+            <p class="input-hint">支持：.txt（URI列表）、.json（本插件导出）、以及Google迁移URI文本文件</p>
+          </div>
+        </div>
+
+        <div id="importResult" class="import-result hidden"></div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" data-close>取消</button>
+          <button type="button" id="doImportBtn" class="btn btn-primary">导入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="../lib/totp.js"></script>
+  <script src="../lib/storage.js"></script>
+  <script src="../lib/qrscanner.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

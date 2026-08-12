@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "身份验证器 - Authenticator",
+  "version": "1.0.0",
+  "description": "浏览器端TOTP身份验证器，支持按用户名关联身份信息并自动填写动态密码",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "身份验证器",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["lib/totp.js", "lib/storage.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>身份验证器 - 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-header">
+      <h1>身份验证器</h1>
+      <p class="subtitle">管理您的两步验证身份信息</p>
+    </header>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>通用设置</h2>
+      </div>
+      <div class="card-body">
+        <div class="setting-item">
+          <div class="setting-info">
+            <label class="setting-title">自动填写动态密码</label>
+            <p class="setting-desc">在登录页面检测到用户名后，自动将对应的动态密码填写到验证码输入框</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoFill">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <label class="setting-title">复制时同时填充</label>
+            <p class="setting-desc">点击复制验证码时，是否同时尝试自动填充到当前页面</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoCopy">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <label class="setting-title">排序方式</label>
+            <p class="setting-desc">弹窗中身份信息的展示顺序</p>
+          </div>
+          <select id="sortBy">
+            <option value="createdAt">按添加时间（新→旧）</option>
+            <option value="serviceName">按服务名称（A→Z）</option>
+            <option value="group">按分组+名称</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-title">默认位数</label>
+            </div>
+            <select id="defaultDigits">
+              <option value="6">6位</option>
+              <option value="8">8位</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-title">默认周期</label>
+            </div>
+            <select id="defaultPeriod">
+              <option value="30">30秒</option>
+              <option value="60">60秒</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-actions">
+          <button id="saveSettings" class="btn btn-primary">保存设置</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>分组与标签管理</h2>
+      </div>
+      <div class="card-body">
+        <div class="manage-tabs">
+          <button class="manage-tab active" data-tab="groups">📁 分组管理</button>
+          <button class="manage-tab" data-tab="tags">🏷️ 标签管理</button>
+        </div>
+        <div id="manage-groups" class="manage-tab-content active">
+          <div id="groupsList" class="manage-list"></div>
+        </div>
+        <div id="manage-tags" class="manage-tab-content">
+          <div id="tagsList" class="manage-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>身份信息管理</h2>
+        <button id="addAccountBtn" class="btn btn-primary btn-sm">+ 添加</button>
+      </div>
+      <div class="card-body">
+        <div class="table-toolbar">
+          <div class="tag-input-wrapper filter-wrapper" data-for="opt-filter-service">
+            <input type="text" id="optFilterService" placeholder="🔍 按服务名称筛选" autocomplete="off">
+            <div class="tag-dropdown hidden" data-dropdown="opt-filter-service"></div>
+          </div>
+          <div class="tag-input-wrapper filter-wrapper" data-for="opt-filter-group">
+            <input type="text" id="optFilterGroup" placeholder="📁 按分组筛选" autocomplete="off">
+            <div class="tag-dropdown hidden" data-dropdown="opt-filter-group"></div>
+          </div>
+          <div class="tag-input-wrapper filter-wrapper" data-for="opt-filter-tags">
+            <input type="text" id="optFilterTags" placeholder="🏷️ 按标签筛选" autocomplete="off">
+            <div class="tag-dropdown hidden" data-dropdown="opt-filter-tags"></div>
+          </div>
+          <div class="filter-clear-wrapper">
+            <button id="optClearFilterBtn" class="btn btn-secondary btn-sm">✕ 清除筛选</button>
+          </div>
+        </div>
+        <div id="accountTable" class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>分组/标签</th>
+                <th>服务名称</th>
+                <th>用户名</th>
+                <th>位数</th>
+                <th>周期</th>
+                <th>动态密码</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="accountTbody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>数据备份与恢复</h2>
+      </div>
+      <div class="card-body">
+        <div class="action-row">
+          <button id="exportUriBtn" class="btn btn-secondary">导出 (TXT/URI)</button>
+          <button id="exportBtn" class="btn btn-secondary">导出备份 (JSON)</button>
+          <label class="btn btn-secondary file-label">
+            导入备份
+            <input type="file" id="importFile" accept=".txt,.json,.text" hidden>
+          </label>
+          <button id="clearBtn" class="btn btn-danger">清除所有数据</button>
+        </div>
+        <p class="hint-text">
+          提示：导出为 TXT 格式时，使用与 Google Authenticator 兼容的 otpauth:// URI 格式，包含分组、标签、网站地址等扩展字段。<br>
+          导入支持：otpauth-migration://（Google迁移码）、otpauth://totp/ URI 列表、本插件 JSON 备份文件。
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <div id="accountModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">添加身份信息</h3>
+        <button class="close-btn" data-close>&times;</button>
+      </div>
+      <form id="accountForm">
+        <input type="hidden" id="accountId">
+        <div class="form-group">
+          <label>服务名称 *</label>
+          <div class="tag-input-wrapper" data-for="opt-service">
+            <input type="text" id="serviceName" required placeholder="选择已有服务或输入新名称" autocomplete="off">
+            <div class="tag-dropdown hidden" data-dropdown="opt-service"></div>
+          </div>
+          <p class="input-hint">点击输入框可从已有服务中选择；同一服务名可关联多个账号（支持按服务聚合）</p>
+        </div>
+        <div class="form-group">
+          <label>用户名/账号 *</label>
+          <input type="text" id="username" required placeholder="关联登录时的用户名，用于自动匹配">
+        </div>
+        <div class="form-group">
+          <label>分组</label>
+          <div class="tag-input-wrapper" data-for="opt-group">
+            <input type="text" id="optGroup" placeholder="输入分组名，点击下方选择已有" autocomplete="off">
+            <div class="tag-dropdown hidden" data-dropdown="opt-group"></div>
+          </div>
+          <p class="input-hint">点击输入框选择已有分组，或输入新名称直接创建</p>
+        </div>
+        <div class="form-group">
+          <label>标签</label>
+          <div class="tags-container" id="optTagsContainer"></div>
+          <div class="tag-input-wrapper" data-for="opt-tags">
+            <input type="text" id="optTagsInput" placeholder="输入标签，回车添加，点击选择已有" autocomplete="off">
+            <div class="tag-dropdown hidden" data-dropdown="opt-tags"></div>
+          </div>
+          <p class="input-hint">每个账号可添加多个标签，用于按角色/权限等维度筛选</p>
+        </div>
+        <div class="form-group">
+          <label>密钥 (Base32) *</label>
+          <input type="text" id="secret" required spellcheck="false" autocapitalize="characters"
+                 placeholder="如: KU5NYCERC223MKL6 (16位、26位、32位等任意长度)">
+          <p class="input-hint">支持任意长度的有效Base32密钥（仅A-Z、2-7字符）。从二维码/otpauth:// URI中复制即可，无需固定32位</p>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>算法</label>
+            <select id="algorithm">
+              <option value="SHA-1" selected>SHA1</option>
+              <option value="SHA-256">SHA256</option>
+              <option value="SHA-512">SHA512</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>位数</label>
+            <select id="digits">
+              <option value="6">6位</option>
+              <option value="8">8位</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>周期 (秒)</label>
+            <select id="period">
+              <option value="30">30秒</option>
+              <option value="60">60秒</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>网站匹配规则 (可选)</label>
+          <input type="text" id="sitePattern" placeholder="如：*.github.com 或 https://example.com/*">
+          <p class="input-hint">用于在特定网站上更精准地匹配，留空则仅按用户名匹配</p>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" data-close>取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="manageModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="manageModalTitle">管理</h3>
+        <button class="close-btn" data-close>&times;</button>
+      </div>
+      <div id="manageModalBody" style="padding: 24px;">
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="../lib/totp.js"></script>
+  <script src="../lib/storage.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
