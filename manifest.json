@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "身份验证器 - Authenticator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "浏览器端TOTP身份验证器，支持按用户名关联身份信息并自动填写动态密码",
   "permissions": [
     "storage",

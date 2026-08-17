@@ -611,6 +611,7 @@ function openEditModal(acc) {
   document.getElementById('digits').value = acc.digits || 6;
   document.getElementById('period').value = acc.period || 30;
   document.getElementById('sitePattern').value = acc.sitePattern || acc.loginUrl || '';
+  document.getElementById('optSelector').value = acc.optSelector || '';
   currentTags = (acc.tags && Array.isArray(acc.tags)) ? [...acc.tags] : [];
   renderOptTags();
   document.getElementById('accountModal').classList.remove('hidden');
@@ -635,7 +636,8 @@ async function handleAccountSubmit(e) {
     group: document.getElementById('optGroup').value.trim(),
     tags: currentTags,
     sitePattern: document.getElementById('sitePattern').value.trim(),
-    loginUrl: document.getElementById('sitePattern').value.trim()
+    loginUrl: document.getElementById('sitePattern').value.trim(),
+    optSelector: document.getElementById('optSelector').value.trim()
   };
 
   if (!TOTP.isValidBase32(secret)) {
@@ -761,6 +763,31 @@ function bindEvents() {
     e.target.value = '';
   });
   document.getElementById('clearBtn').addEventListener('click', handleClear);
+
+  document.getElementById('pickOtpBtn').addEventListener('click', async () => {
+    try {
+      const allTabs = await chrome.tabs.query({ currentWindow: true });
+      let selfTabId = null;
+      try { const selfTab = await chrome.tabs.getCurrent(); if (selfTab) selfTabId = selfTab.id; } catch (e) {}
+      const candidate = allTabs.find(t => t.id !== selfTabId && t.url && /^https?:/i.test(t.url) && !t.url.startsWith('chrome://'));
+      if (!candidate) {
+        showToast('未找到可拾取的网页页签，请先打开登录页面', 'error');
+        return;
+      }
+      showToast('请到登录页面点击动态密钥输入框（Esc 取消）');
+      const resp = await chrome.tabs.sendMessage(candidate.id, { type: 'PICK_OTP_INPUT' });
+      if (resp && resp.selector) {
+        document.getElementById('optSelector').value = resp.selector;
+        showToast('已拾取输入框地址');
+      } else if (resp && resp.cancelled) {
+        showToast('已取消拾取');
+      } else {
+        showToast('拾取未返回有效结果', 'error');
+      }
+    } catch (e) {
+      showToast('拾取失败：' + (e && e.message ? e.message : '请确认已打开登录页'), 'error');
+    }
+  });
 
   document.querySelectorAll('.manage-tab').forEach(tab => {
     tab.addEventListener('click', () => {

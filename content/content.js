@@ -77,7 +77,8 @@ const TOTP = {
     settings: { autoFill: true },
     lastUsername: '',
     filledFields: new WeakSet(),
-    filledCodes: new Map()
+    filledCodes: new Map(),
+    pickingActive: false
   };
 
   const USERNAME_SELECTORS = [
@@ -135,7 +136,7 @@ const TOTP = {
     'input[inputmode="numeric"][maxlength="8"]',
     'input[type="text"][maxlength="6"]',
     'input[type="text"][maxlength="8"]',
-    'input[placeholder*="验证码" i]',
+    'input[placeholder*="谷歌验证码" i]',
     'input[placeholder*="动态" i]',
     'input[placeholder*="OTP" i]',
     'input[placeholder*="6位" i]',
@@ -190,6 +191,213 @@ const TOTP = {
 
   function findOtpInputs() {
     return findInputs(OTP_SELECTORS);
+  }
+
+  function findOtpInputsBySelector(selector) {
+    if (!selector || typeof selector !== 'string') return [];
+    const found = [];
+    try {
+      const inputs = document.querySelectorAll(selector);
+      inputs.forEach(inp => {
+        if (inp && inp.offsetParent !== null && !found.includes(inp)) {
+          found.push(inp);
+        }
+      });
+    } catch (e) {
+      console.warn('[Authenticator] 自定义 optSelector 查找失败:', selector, e.message);
+    }
+    return found;
+  }
+
+  function buildUniqueSelector(el) {
+    if (!el || el.nodeType !== 1) return '';
+    const tag = el.tagName.toLowerCase();
+    const attr = (name) => (el.getAttribute ? el.getAttribute(name) : null);
+    const esc = (v) => { try { return CSS.escape(v); } catch (e) { return String(v); } };
+    const isUnique = (sel) => {
+      try { return document.querySelectorAll(sel).length === 1; } catch (e) { return false; }
+    };
+
+    console.log('[Authenticator BuildSelector] 元素:', tag, 'id=', attr('id'), 'class=', attr('class'), 'placeholder=', attr('placeholder'));
+
+    const ph = attr('placeholder');
+    if (ph) {
+      const sel = `${tag}[placeholder="${esc(ph)}"]`;
+      console.log('[Authenticator BuildSelector] 尝试 placeholder:', sel, '命中', document.querySelectorAll(sel).length);
+      if (isUnique(sel)) return sel;
+    }
+
+    const name = attr('name');
+    if (name) {
+      const sel = `${tag}[name="${esc(name)}"]`;
+      console.log('[Authenticator BuildSelector] 尝试 name:', sel, '命中', document.querySelectorAll(sel).length);
+      if (isUnique(sel)) return sel;
+    }
+
+    const ac = attr('autocomplete');
+    if (ac) {
+      const sel = `${tag}[autocomplete="${esc(ac)}"]`;
+      console.log('[Authenticator BuildSelector] 尝试 autocomplete:', sel, '命中', document.querySelectorAll(sel).length);
+      if (isUnique(sel)) return sel;
+    }
+
+    const type = attr('type');
+    if (type && ph) {
+      const sel = `${tag}[type="${esc(type)}"][placeholder="${esc(ph)}"]`;
+      console.log('[Authenticator BuildSelector] 尝试 type+placeholder:', sel, '命中', document.querySelectorAll(sel).length);
+      if (isUnique(sel)) return sel;
+    }
+
+    const classes = (el.className && typeof el.className === 'string')
+      ? el.className.trim().split(/\s+/).filter(Boolean) : [];
+    if (classes.length) {
+      const sel = `${tag}.${classes.map(esc).join('.')}`;
+      console.log('[Authenticator BuildSelector] 尝试 class:', sel, '命中', document.querySelectorAll(sel).length);
+      if (isUnique(sel)) return sel;
+
+      if (ph) {
+        const sel2 = `${tag}.${classes.map(esc).join('.')}[placeholder="${esc(ph)}"]`;
+        console.log('[Authenticator BuildSelector] 尝试 class+placeholder:', sel2, '命中', document.querySelectorAll(sel2).length);
+        if (isUnique(sel2)) return sel2;
+      }
+      if (name) {
+        const sel3 = `${tag}.${classes.map(esc).join('.')}[name="${esc(name)}"]`;
+        console.log('[Authenticator BuildSelector] 尝试 class+name:', sel3, '命中', document.querySelectorAll(sel3).length);
+        if (isUnique(sel3)) return sel3;
+      }
+    }
+
+    const parts = [];
+    let node = el;
+    while (node && node.nodeType === 1 && node !== document.documentElement) {
+      let part = node.tagName.toLowerCase();
+      const nodeClasses = (node.className && typeof node.className === 'string')
+        ? node.className.trim().split(/\s+/).filter(Boolean).slice(0, 3) : [];
+      if (nodeClasses.length) {
+        part += '.' + nodeClasses.map(esc).join('.');
+      }
+      const parent = node.parentNode;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter(c => c.tagName === node.tagName);
+        if (siblings.length > 1) {
+          const idx = siblings.indexOf(node) + 1;
+          part += `:nth-of-type(${idx})`;
+        }
+      }
+      parts.unshift(part);
+      const candidate = parts.join(' > ');
+      try {
+        if (document.querySelectorAll(candidate).length === 1) {
+          console.log('[Authenticator BuildSelector] 路径方式命中唯一:', candidate);
+          return candidate;
+        }
+      } catch (e) {}
+      node = parent;
+    }
+    const finalSel = parts.join(' > ');
+    console.log('[Authenticator BuildSelector] 最终路径:', finalSel);
+    return finalSel;
+  }
+
+  function enterPickMode(sendResponse) {
+    if (state.pickingActive) {
+      console.warn('[Authenticator Pick] 已在拾取模式中');
+      if (sendResponse) sendResponse({ error: '已在拾取模式中' });
+      return;
+    }
+    state.pickingActive = true;
+    console.log('%c[Authenticator Pick] 进入拾取模式', 'color:#667eea;font-weight:bold');
+
+    const overlay = document.createElement('div');
+    overlay.id = '__authenticator_pick_overlay__';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(102,126,234,0.08); z-index: 2147483646;
+      cursor: crosshair; pointer-events: auto;
+    `;
+    const tip = document.createElement('div');
+    tip.style.cssText = `
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+      padding: 10px 20px; border-radius: 8px; font-size: 14px;
+      font-family: -apple-system, sans-serif; z-index: 2147483647;
+      box-shadow: 0 4px 16px rgba(102,126,234,0.4); pointer-events: none;
+    `;
+    tip.textContent = '🔐 请点击登录页面中的「动态密钥/验证码输入框」';
+    const cancelTip = document.createElement('div');
+    cancelTip.style.cssText = `
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: rgba(239,68,68,0.9); color: white;
+      padding: 6px 16px; border-radius: 6px; font-size: 12px;
+      font-family: -apple-system, sans-serif; z-index: 2147483647;
+      box-shadow: 0 2px 8px rgba(239,68,68,0.3); pointer-events: none;
+    `;
+    cancelTip.textContent = '按 Esc 取消拾取';
+    document.body.appendChild(overlay);
+    document.body.appendChild(tip);
+    document.body.appendChild(cancelTip);
+
+    function cleanup() {
+      state.pickingActive = false;
+      overlay.remove();
+      tip.remove();
+      cancelTip.remove();
+      document.removeEventListener('keydown', onKey, true);
+      console.log('[Authenticator Pick] 清理拾取模式');
+    }
+
+    function onKey(e) {
+      console.log('[Authenticator Pick] keydown:', e.key);
+      if (e.key === 'Escape') {
+        cleanup();
+        if (sendResponse) sendResponse({ cancelled: true });
+        sendResponse = null;
+      }
+    }
+
+    function onOverlayClick(e) {
+      console.log('[Authenticator Pick] overlay click at', e.clientX, e.clientY, 'target=', e.target);
+      overlay.style.display = 'none';
+      const realTarget = document.elementFromPoint(e.clientX, e.clientY);
+      overlay.style.display = '';
+      console.log('[Authenticator Pick] elementFromPoint ->', realTarget, realTarget ? `(${realTarget.tagName})` : '(null)');
+
+      if (!realTarget) {
+        console.warn('[Authenticator Pick] 未获取到真实元素');
+        return;
+      }
+      const isInput = realTarget.tagName === 'INPUT' || realTarget.tagName === 'TEXTAREA';
+      if (!isInput) {
+        console.log('[Authenticator Pick] 点击的不是 input/textarea:', realTarget.tagName, realTarget);
+        tip.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+        tip.textContent = '✗ 请点击输入框（input/textarea），而非其他元素';
+        setTimeout(() => {
+          tip.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+          tip.textContent = '🔐 请点击登录页面中的「动态密钥/验证码输入框」';
+        }, 1500);
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      const selector = buildUniqueSelector(realTarget);
+      console.log('%c[Authenticator Pick] 拾取成功 selector:', 'color:#10b981;font-weight:bold', selector);
+      console.log('[Authenticator Pick] 验证 selector 唯一性:', document.querySelectorAll(selector).length, '个匹配');
+      cleanup();
+      try {
+        chrome.storage.local.set({ authenticator_picked_selector: { selector, url: location.href, pickedAt: Date.now() } });
+        console.log('[Authenticator Pick] 已存入 storage.local');
+      } catch (err) {
+        console.error('[Authenticator Pick] 存入 storage.local 失败:', err);
+      }
+      if (sendResponse) {
+        sendResponse({ selector, url: location.href });
+        sendResponse = null;
+      }
+    }
+
+    document.addEventListener('keydown', onKey, true);
+    overlay.addEventListener('click', onOverlayClick);
+    console.log('[Authenticator Pick] 事件监听已绑定 (overlay.click + document.keydown)');
   }
 
   function extractHostname(urlOrHost) {
@@ -381,8 +589,20 @@ const TOTP = {
         { serviceName: account.serviceName, username: account.username,
           loginUrl: account.loginUrl || account.sitePattern || '', code });
 
-      const otpInputs = findOtpInputs();
-      console.log('[Authenticator] 找到 OTP 输入框数量:', otpInputs.length);
+      const customSelector = (account.optSelector || '').trim();
+      let otpInputs = [];
+      if (customSelector) {
+        otpInputs = findOtpInputsBySelector(customSelector);
+        console.log('[Authenticator] 使用自定义 optSelector:', customSelector, '找到', otpInputs.length, '个输入框');
+      }
+      if (otpInputs.length === 0) {
+        otpInputs = findOtpInputs();
+        if (customSelector) {
+          console.log('[Authenticator] 自定义 selector 未命中，回退默认选择器，找到', otpInputs.length, '个');
+        } else {
+          console.log('[Authenticator] 找到 OTP 输入框数量:', otpInputs.length);
+        }
+      }
       for (const inp of otpInputs) {
         if (inp && inp.offsetParent !== null) {
           fillInput(inp, code);
@@ -400,13 +620,20 @@ const TOTP = {
 
   function scheduleRetryFill(account, code) {
     let attempts = 0;
+    const customSelector = (account && account.optSelector || '').trim();
     const timer = setInterval(async () => {
       attempts++;
       if (attempts > 10) {
         clearInterval(timer);
         return;
       }
-      const otpInputs = findOtpInputs();
+      let otpInputs = [];
+      if (customSelector) {
+        otpInputs = findOtpInputsBySelector(customSelector);
+      }
+      if (otpInputs.length === 0) {
+        otpInputs = findOtpInputs();
+      }
       for (const inp of otpInputs) {
         if (inp && inp.offsetParent !== null && !state.filledCodes.has(inp)) {
           fillInput(inp, code);
@@ -480,13 +707,23 @@ const TOTP = {
     try {
       chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg && msg.type === 'FILL_OTP' && msg.code) {
-          const otpInputs = findOtpInputs();
+          let otpInputs = [];
+          const customSelector = (msg.optSelector || '').trim();
+          if (customSelector) {
+            otpInputs = findOtpInputsBySelector(customSelector);
+          }
+          if (otpInputs.length === 0) {
+            otpInputs = findOtpInputs();
+          }
           for (const inp of otpInputs) {
             if (inp && inp.offsetParent !== null) {
               fillInput(inp, msg.code);
             }
           }
           sendResponse({ filled: otpInputs.length });
+        }
+        if (msg && msg.type === 'PICK_OTP_INPUT') {
+          enterPickMode(sendResponse);
         }
         return true;
       });

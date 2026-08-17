@@ -230,6 +230,14 @@
           <input type="text" id="sitePattern" placeholder="如：*.github.com 或 https://example.com/*">
           <p class="input-hint">用于在特定网站上更精准地匹配，留空则仅按用户名匹配</p>
         </div>
+        <div class="form-group">
+          <label>动态密钥输入框地址 (可选)</label>
+          <div class="opt-selector-row" style="display:flex; gap:8px; align-items:flex-start;">
+            <input type="text" id="optSelector" placeholder="留空则使用默认规则自动查找验证码框" style="flex:1;">
+            <button type="button" id="pickOtpBtn" class="btn btn-secondary" title="点击后请到登录页面点击动态密钥输入框" style="flex-shrink:0;">拾取</button>
+          </div>
+          <p class="input-hint">点击「拾取」后到登录页面点击动态密钥输入框，可精确定位自动填充目标（失败时回退默认规则）</p>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" data-close>取消</button>
           <button type="submit" class="btn btn-primary">保存</button>

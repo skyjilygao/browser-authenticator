@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const popupFilter = { service: '', group: '', tag: '' };
 
   function showToast(msg, type = 'success') {
+    console.log(`${msg}`)
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.className = 'toast ' + type;
@@ -472,6 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('algorithm').value = acc.algorithm || 'SHA-1';
     document.getElementById('digits').value = acc.digits || 6;
     document.getElementById('period').value = acc.period || 30;
+    document.getElementById('optSelector').value = acc.optSelector || '';
     currentTags = (acc.tags && Array.isArray(acc.tags)) ? [...acc.tags] : [];
     renderTags();
     addModal.classList.remove('hidden');
@@ -501,6 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const algorithm = document.getElementById('algorithm').value;
     const digits = document.getElementById('digits').value;
     const period = document.getElementById('period').value;
+    const optSelector = document.getElementById('optSelector').value.trim();
 
     if (!TOTP.isValidBase32(secret)) {
       showToast('密钥格式无效：Base32 只能包含 A-Z 与 2-7 字符', 'error');
@@ -522,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
       serviceName, username, loginUrl, secret,
       issuer: serviceName, algorithm,
       digits: parseInt(digits), period: parseInt(period),
-      group, tags: currentTags
+      group, tags: currentTags, optSelector
     };
 
     try {
@@ -547,6 +550,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setupTagInputs();
   setupFilterInputs();
+
+  async function saveFormDraft() {
+    const draft = {
+      editAccountId: document.getElementById('editAccountId').value,
+      serviceName: document.getElementById('serviceName').value,
+      username: document.getElementById('username').value,
+      loginUrl: document.getElementById('loginUrl').value,
+      group: document.getElementById('groupInput').value,
+      secret: document.getElementById('secret').value,
+      algorithm: document.getElementById('algorithm').value,
+      digits: document.getElementById('digits').value,
+      period: document.getElementById('period').value,
+      optSelector: document.getElementById('optSelector').value,
+      tags: [...currentTags]
+    };
+    await chrome.storage.local.set({ authenticator_form_draft: draft });
+  }
+
+  async function restoreFormDraft() {
+    const result = await chrome.storage.local.get(['authenticator_form_draft', 'authenticator_picked_selector']);
+    const draft = result.authenticator_form_draft;
+    const picked = result.authenticator_picked_selector;
+    if (!draft) return;
+
+    document.getElementById('editAccountId').value = draft.editAccountId || '';
+    document.getElementById('serviceName').value = draft.serviceName || '';
+    document.getElementById('username').value = draft.username || '';
+    document.getElementById('loginUrl').value = draft.loginUrl || '';
+    document.getElementById('groupInput').value = draft.group || '';
+    document.getElementById('secret').value = draft.secret || '';
+    document.getElementById('algorithm').value = draft.algorithm || 'SHA-1';
+    document.getElementById('digits').value = draft.digits || 6;
+    document.getElementById('period').value = draft.period || 30;
+    document.getElementById('optSelector').value = draft.optSelector || '';
+    currentTags = Array.isArray(draft.tags) ? [...draft.tags] : [];
+    renderTags();
+
+    document.getElementById('addModalTitle').textContent = draft.editAccountId ? '编辑身份信息' : '添加身份信息';
+    addModal.classList.remove('hidden');
+
+    if (picked && picked.selector) {
+      document.getElementById('optSelector').value = picked.selector;
+      showToast('已拾取输入框地址，请确认后保存');
+    } else {
+      showToast('已恢复未保存的表单草稿');
+    }
+
+    await chrome.storage.local.remove(['authenticator_form_draft', 'authenticator_picked_selector']);
+  }
+
+  document.getElementById('pickOtpBtn').addEventListener('click', async () => {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tabs || !tabs.length) {
+        showToast('未找到当前活动页签', 'error');
+        return;
+      }
+      const tab = tabs[0];
+      if (!tab.url || !/^https?:/i.test(tab.url)) {
+        showToast('当前页签不是普通网页，无法拾取', 'error');
+        return;
+      }
+      await saveFormDraft();
+      await chrome.tabs.sendMessage(tab.id, { type: 'PICK_OTP_INPUT' });
+      showToast('请到登录页面点击动态密钥输入框');
+    } catch (e) {
+      showToast('拾取请求失败：' + (e && e.message ? e.message : '请确认已打开登录页'), 'error');
+      await chrome.storage.local.remove('authenticator_form_draft');
+    }
+  });
+
+  restoreFormDraft();
 
   importBtn.addEventListener('click', () => {
     pendingImportText = '';

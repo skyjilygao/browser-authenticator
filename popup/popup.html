@@ -69,6 +69,14 @@
           <p class="input-hint">相同用户名在不同网站各有独立TOTP时，请填写此项用于区分</p>
         </div>
         <div class="form-group">
+          <label>动态密钥输入框地址 (可选)</label>
+          <div class="opt-selector-row" style="display:flex; gap:8px; align-items:flex-start;">
+            <input type="text" id="optSelector" placeholder="留空则使用默认规则自动查找验证码框" style="flex:1;">
+            <button type="button" id="pickOtpBtn" class="btn btn-secondary" title="点击后请到登录页面点击动态密钥输入框" style="flex-shrink:0;">拾取</button>
+          </div>
+          <p class="input-hint">点击「拾取」后到登录页面点击动态密钥输入框，可精确定位自动填充目标（失败时回退默认规则）</p>
+        </div>
+        <div class="form-group">
           <label>分组</label>
           <div class="tag-input-wrapper" data-for="group">
             <input type="text" id="groupInput" placeholder="输入分组名称，回车添加" autocomplete="off">
